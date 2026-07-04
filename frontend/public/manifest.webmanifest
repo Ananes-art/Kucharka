@@ -1,0 +1,17 @@
+{
+  "name": "Kuchařka",
+  "short_name": "Kuchařka",
+  "description": "Recepty, sklad surovin a hlídání spotřeby",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Číselník surovin (aby nevznikal bordel) + aliasy z účtenek
+// ------------------------------------------------------------------
+model Ingredient {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // zobrazovaný název, např. "Chléb"
+  category  String? // volitelná kategorie (pečivo, mléčné, ...)
+  baseUnit  String   @default("ks") // g | ml | ks  (základní jednotka pro přepočty)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aliases           IngredientAlias[]
+  recipeIngredients RecipeIngredient[]
+  stockItems        StockItem[]
+  receiptLines      ReceiptLine[]
+  shoppingItems     ShoppingItem[]
+}
+
+// Klíčové slovo z účtenky -> surovina. "chleba máslový" => Chléb
+model IngredientAlias {
+  id           Int        @id @default(autoincrement())
+  keyword      String     @unique // normalizovaný text (lowercase, bez diakritiky)
+  label        String // původní text z účtenky pro zobrazení
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  ingredientId Int
+  createdAt    DateTime   @default(now())
+}
+
+// ------------------------------------------------------------------
+// Recepty
+// ------------------------------------------------------------------
+model Recipe {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String? // krátký popis
+  category    String? // oběd, dezert, ...
+  tags        String[] @default([]) // vegetariánské, rychlovka, ...
+  prepMinutes Int? // doba přípravy
+  servings    Int      @default(2)
+  rating      Int? // 1-5
+  favorite    Boolean  @default(false)
+  mainImage   String? // cesta k hlavnímu obrázku
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ingredients RecipeIngredient[]
+  steps       RecipeStep[]
+  comments    Comment[]
+}
+
+model RecipeIngredient {
+  id           Int        @id @default(autoincrement())
+  recipe       Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId     Int
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+  ingredientId Int
+  quantity     Float // množství
+  unit         String // g | kg | ml | l | ks
+  note         String? // volitelná poznámka (např. "nadrobno")
+
+  @@index([recipeId])
+}
+
+model RecipeStep {
+  id       Int     @id @default(autoincrement())
+  recipe   Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId Int
+  order    Int // pořadí kroku
+  text     String
+  image    String? // volitelný obrázek kroku
+
+  @@index([recipeId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  recipeId  Int
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([recipeId])
+}
+
+// ------------------------------------------------------------------
+// Sklad (spižírna) s hlídáním data spotřeby
+// ------------------------------------------------------------------
+model StockItem {
+  id           Int         @id @default(autoincrement())
+  ingredient   Ingredient  @relation(fields: [ingredientId], references: [id])
+  ingredientId Int
+  quantity     Float
+  unit         String // g | kg | ml | l | ks
+  expiryDate   DateTime? // datum spotřeby
+  purchaseDate DateTime    @default(now())
+  receipt      Receipt?    @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  receiptId    Int?
+  createdAt    DateTime    @default(now())
+
+  @@index([ingredientId])
+  @@index([expiryDate])
+}
+
+// ------------------------------------------------------------------
+// Účtenky a jejich řádky (průvodce)
+// ------------------------------------------------------------------
+model Receipt {
+  id         Int           @id @default(autoincrement())
+  image      String // cesta k fotce účtenky
+  store      String? // obchod (heuristika z OCR)
+  purchasedAt DateTime? // datum nákupu z účtenky
+  total      Float? // celková částka
+  rawText    String? // surový text z OCR
+  status     String        @default("pending") // pending | done
+  createdAt  DateTime      @default(now())
+
+  lines      ReceiptLine[]
+  stockItems StockItem[]
+}
+
+model ReceiptLine {
+  id           Int         @id @default(autoincrement())
+  receipt      Receipt     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptId    Int
+  rawText      String // celý řádek z účtenky
+  keyword      String // navržené klíčové slovo (normalizované)
+  quantity     Float? // rozpoznané množství
+  unit         String? // rozpoznaná jednotka
+  price        Float? // cena
+  ingredient   Ingredient? @relation(fields: [ingredientId], references: [id])
+  ingredientId Int? // přiřazená surovina (po potvrzení)
+  expiryDate   DateTime? // datum spotřeby zadané v průvodci
+  processed    Boolean     @default(false) // zpracováno do skladu
+  ignored      Boolean     @default(false) // uživatel řádek přeskočil
+
+  @@index([receiptId])
+}
+
+// ------------------------------------------------------------------
+// Nákupní seznam
+// ------------------------------------------------------------------
+model ShoppingItem {
+  id           Int         @id @default(autoincrement())
+  ingredient   Ingredient? @relation(fields: [ingredientId], references: [id])
+  ingredientId Int?
+  name         String // pro volné položky bez surovin z číselníku
+  quantity     Float?
+  unit         String?
+  note         String? // např. "pro recept: Svíčková"
+  checked      Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+}

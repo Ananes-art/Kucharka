@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Prisma generated client
+backend/node_modules/.prisma/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Uploads (runtime data) – ponech jen adresář
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
